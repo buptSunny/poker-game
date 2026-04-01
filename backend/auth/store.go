@@ -52,6 +52,8 @@ func NewStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	// SQLite only supports one writer at a time; serialize all access through a single connection.
+	db.SetMaxOpenConns(1)
 
 	for _, stmt := range []string{
 		`CREATE TABLE IF NOT EXISTS users (

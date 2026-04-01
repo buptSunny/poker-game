@@ -778,6 +778,178 @@ func TestIntegration_SixPlayerStress(t *testing.T) {
 	}
 }
 
+// helper: get players from state
+func (p *wsPlayer) getPlayers() []map[string]interface{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.state == nil {
+		return nil
+	}
+	players, ok := p.state["players"].([]interface{})
+	if !ok {
+		return nil
+	}
+	result := make([]map[string]interface{}, 0, len(players))
+	for _, pl := range players {
+		if pm, ok := pl.(map[string]interface{}); ok {
+			result = append(result, pm)
+		}
+	}
+	return result
+}
+
+// Test: Ready state broadcasts to other players + toggle ready
+func TestIntegration_ReadyBroadcastAndToggle(t *testing.T) {
+	serverURL, _, cleanup := setupIntegrationServer(t)
+	defer cleanup()
+
+	id1, tok1 := registerUser(t, serverURL, "Alice", "pass1")
+	id2, tok2 := registerUser(t, serverURL, "Bob", "pass2")
+
+	roomID := createRoom(t, serverURL, 2, 10, 1000)
+
+	// Alice joins
+	p1 := newWSPlayer(t, serverURL, roomID, id1, "Alice", tok1)
+	defer p1.close()
+	time.Sleep(300 * time.Millisecond)
+
+	// Alice readies up
+	p1.ready()
+	time.Sleep(300 * time.Millisecond)
+
+	// Verify Alice sees herself as ready
+	players := p1.getPlayers()
+	if len(players) != 1 {
+		t.Fatalf("Alice should see 1 player, got %d", len(players))
+	}
+	if ready, _ := players[0]["isReady"].(bool); !ready {
+		t.Error("Alice should see herself as ready")
+	}
+
+	// Bob joins — should see Alice (ready) and himself (not ready)
+	p2 := newWSPlayer(t, serverURL, roomID, id2, "Bob", tok2)
+	defer p2.close()
+	time.Sleep(300 * time.Millisecond)
+
+	players = p2.getPlayers()
+	if len(players) != 2 {
+		t.Fatalf("Bob should see 2 players, got %d", len(players))
+	}
+	t.Logf("Bob sees %d players", len(players))
+	for _, pl := range players {
+		name := pl["name"].(string)
+		ready, _ := pl["isReady"].(bool)
+		t.Logf("  %s: isReady=%v", name, ready)
+		if name == "Alice" && !ready {
+			t.Error("Bob should see Alice as ready")
+		}
+		if name == "Bob" && ready {
+			t.Error("Bob should see himself as NOT ready")
+		}
+	}
+
+	// Alice also sees both players
+	players = p1.getPlayers()
+	if len(players) != 2 {
+		t.Fatalf("Alice should see 2 players after Bob joins, got %d", len(players))
+	}
+
+	// Test toggle: Alice cancels ready
+	p1.ready() // toggle off
+	time.Sleep(300 * time.Millisecond)
+
+	// Bob should see Alice as NOT ready
+	players = p2.getPlayers()
+	aliceReady := false
+	for _, pl := range players {
+		if pl["name"].(string) == "Alice" {
+			aliceReady, _ = pl["isReady"].(bool)
+		}
+	}
+	if aliceReady {
+		t.Error("After toggle, Bob should see Alice as NOT ready")
+	}
+
+	// Alice re-readies, Bob readies — game should start
+	p1.ready()
+	time.Sleep(100 * time.Millisecond)
+	p2.ready()
+	time.Sleep(500 * time.Millisecond)
+
+	// Both should be in preflop (game started)
+	phase1 := p1.getPhase()
+	phase2 := p2.getPhase()
+	if phase1 != "preflop" {
+		t.Errorf("Alice phase = %s, want preflop", phase1)
+	}
+	if phase2 != "preflop" {
+		t.Errorf("Bob phase = %s, want preflop", phase2)
+	}
+	t.Logf("Game started: Alice=%s, Bob=%s", phase1, phase2)
+}
+
+// Test: Late joiner sees existing players and their ready state
+func TestIntegration_LateJoinerSeesPlayers(t *testing.T) {
+	serverURL, _, cleanup := setupIntegrationServer(t)
+	defer cleanup()
+
+	id1, tok1 := registerUser(t, serverURL, "Alice", "pass1")
+	id2, tok2 := registerUser(t, serverURL, "Bob", "pass2")
+	id3, tok3 := registerUser(t, serverURL, "Charlie", "pass3")
+
+	roomID := createRoom(t, serverURL, 4, 10, 1000)
+
+	// Alice joins and readies, Bob joins but does NOT ready
+	p1 := newWSPlayer(t, serverURL, roomID, id1, "Alice", tok1)
+	defer p1.close()
+	time.Sleep(200 * time.Millisecond)
+
+	p2 := newWSPlayer(t, serverURL, roomID, id2, "Bob", tok2)
+	defer p2.close()
+	time.Sleep(200 * time.Millisecond)
+
+	p1.ready()
+	time.Sleep(300 * time.Millisecond)
+
+	// Charlie joins late — should see Alice (ready), Bob (not ready), and himself
+	p3 := newWSPlayer(t, serverURL, roomID, id3, "Charlie", tok3)
+	defer p3.close()
+	time.Sleep(300 * time.Millisecond)
+
+	players := p3.getPlayers()
+	if len(players) != 3 {
+		t.Fatalf("Charlie should see 3 players, got %d", len(players))
+	}
+	for _, pl := range players {
+		name := pl["name"].(string)
+		ready, _ := pl["isReady"].(bool)
+		t.Logf("Charlie sees: %s isReady=%v", name, ready)
+		if name == "Alice" && !ready {
+			t.Error("Charlie should see Alice as ready")
+		}
+		if name == "Bob" && ready {
+			t.Error("Charlie should see Bob as NOT ready")
+		}
+		if name == "Charlie" && ready {
+			t.Error("Charlie should see himself as NOT ready")
+		}
+	}
+
+	// Everyone readies — game should start
+	p2.ready()
+	time.Sleep(100 * time.Millisecond)
+	p3.ready()
+	time.Sleep(500 * time.Millisecond)
+
+	for _, p := range []*wsPlayer{p1, p2, p3} {
+		phase := p.getPhase()
+		if phase != "preflop" {
+			t.Errorf("%s phase = %s, want preflop", p.name, phase)
+		}
+	}
+	t.Log("All 3 players in game — late joiner saw everyone correctly!")
+}
+
 func contains(ss []string, s string) bool {
 	for _, x := range ss {
 		if x == s {

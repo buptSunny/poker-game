@@ -233,9 +233,10 @@ func (g *Game) SetReady(id string) {
 	defer g.mu.Unlock()
 	for _, p := range g.Players {
 		if p.ID == id {
-			p.IsReady = true
+			p.IsReady = !p.IsReady
 		}
 	}
+	g.broadcastState()
 	g.maybeStart()
 }
 

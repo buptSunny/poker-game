@@ -253,10 +253,12 @@ function showReadyButton(state) {
   const el = document.getElementById('actionButtons');
   el.innerHTML = '';
 
+  const me = (state.players || []).find(p => p.id === myId);
+  const amReady = me && me.isReady;
   const readyBtn = document.createElement('button');
-  readyBtn.className = 'btn btn-ready';
-  readyBtn.textContent = '准 备';
-  readyBtn.onclick = () => { sock.send('ready', {}); readyBtn.disabled = true; readyBtn.textContent = '已准备'; };
+  readyBtn.className = amReady ? 'btn btn-call' : 'btn btn-ready';
+  readyBtn.textContent = amReady ? '取消准备' : '准 备';
+  readyBtn.onclick = () => { sock.send('ready', {}); };
   el.appendChild(readyBtn);
 
   // Rebuy button
