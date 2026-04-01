@@ -358,6 +358,29 @@ function showShowdown(payload) {
   comm.innerHTML = '';
   (payload.community || []).forEach(c => comm.appendChild(renderCard(c)));
 
+  // pot breakdown (side pots explanation)
+  const potsEl = document.getElementById('potBreakdown');
+  if (potsEl) potsEl.remove();
+  const pots = payload.pots || [];
+  if (pots.length > 1) {
+    const breakdown = document.createElement('div');
+    breakdown.id = 'potBreakdown';
+    breakdown.style.cssText = 'margin-bottom:12px;text-align:left;font-size:.85rem;background:rgba(0,0,0,0.3);padding:10px 14px;border-radius:8px;';
+    let html = '<div style="font-weight:bold;margin-bottom:6px;text-align:center;color:#f0c040">边池分配说明</div>';
+    pots.forEach(pot => {
+      const winnersStr = pot.winners.join('、');
+      const eligibleStr = pot.eligible.join('、');
+      html += `<div style="margin-bottom:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.1)">`;
+      html += `<span style="color:#2ecc71;font-weight:bold">${esc(pot.label)}</span>`;
+      html += ` <span style="color:#f0c040">${pot.amount}</span> 筹码`;
+      html += ` — 参与者: ${esc(eligibleStr)}`;
+      html += `<br>→ <strong>${esc(winnersStr)}</strong> 以 <span style="color:#e67e22">${esc(pot.handRank)}</span> 赢得`;
+      html += `</div>`;
+    });
+    breakdown.innerHTML = html;
+    comm.parentNode.insertBefore(breakdown, comm.nextSibling);
+  }
+
   // results
   const el = document.getElementById('showdownResults');
   el.innerHTML = '';

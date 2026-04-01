@@ -640,6 +640,16 @@ type ShowdownResult struct {
 	IsWinner bool       `json:"isWinner"`
 }
 
+// PotDetail describes one pot (main or side) and who won it.
+type PotDetail struct {
+	Label       string   `json:"label"`       // e.g. "主池", "边池1"
+	Amount      int      `json:"amount"`
+	Winners     []string `json:"winners"`     // winner names
+	WinnerIDs   []string `json:"winnerIds"`
+	HandRank    string   `json:"handRank"`    // winning hand description
+	Eligible    []string `json:"eligible"`    // all eligible player names
+}
+
 func (g *Game) doShowdown() {
 	nf := g.nonFolded()
 	type eval struct {
@@ -660,8 +670,9 @@ func (g *Game) doShowdown() {
 	}
 
 	wonMap := map[string]int{}
+	var potDetails []PotDetail
 
-	for _, pot := range pots {
+	for potIdx, pot := range pots {
 		// evaluate eligible players for this pot
 		type potEval struct {
 			p      *PlayerState
@@ -705,6 +716,30 @@ func (g *Game) doShowdown() {
 			potWinners[0].Chips += remainder
 			wonMap[potWinners[0].ID] += remainder
 		}
+
+		// Build pot detail for frontend explanation
+		label := "主池"
+		if potIdx > 0 {
+			label = fmt.Sprintf("边池%d", potIdx)
+		}
+		winnerNames := make([]string, len(potWinners))
+		winnerIDs := make([]string, len(potWinners))
+		for i, w := range potWinners {
+			winnerNames[i] = w.Name
+			winnerIDs[i] = w.ID
+		}
+		eligibleNames := make([]string, len(pe))
+		for i, e := range pe {
+			eligibleNames[i] = e.p.Name
+		}
+		potDetails = append(potDetails, PotDetail{
+			Label:    label,
+			Amount:   pot.Amount,
+			Winners:  winnerNames,
+			WinnerIDs: winnerIDs,
+			HandRank: best.RankName,
+			Eligible: eligibleNames,
+		})
 	}
 
 	// build results
@@ -739,6 +774,7 @@ func (g *Game) doShowdown() {
 	g.Broadcast(Message{Type: "showdown", Payload: map[string]interface{}{
 		"results":   results,
 		"community": g.Community,
+		"pots":      potDetails,
 	}})
 
 	// snapshot for callbacks (captured before AfterFunc closure)
