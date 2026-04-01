@@ -32,6 +32,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /rooms/{roomId}/bots", s.addBot)
 	mux.HandleFunc("GET /rooms/{roomId}/hands", s.roomHands)
 	mux.HandleFunc("GET /leaderboard", s.leaderboard)
+	mux.HandleFunc("POST /auth/anonymous", s.anonymous)
+	mux.HandleFunc("GET /settings/leaderboard", s.getLeaderboardSetting)
+	mux.HandleFunc("POST /settings/leaderboard", s.setLeaderboardSetting)
+	mux.HandleFunc("GET /auth/admin", s.checkAdmin)
 	mux.HandleFunc("GET /ws", s.hub.ServeWS)
 	// serve frontend static files
 	mux.Handle("/", http.FileServer(http.Dir("../frontend")))
@@ -261,4 +265,61 @@ func (s *Server) roomHands(w http.ResponseWriter, r *http.Request) {
 		hands = []map[string]interface{}{}
 	}
 	writeJSON(w, http.StatusOK, hands)
+}
+
+func (s *Server) anonymous(w http.ResponseWriter, r *http.Request) {
+	user, token, err := s.store.RegisterAnonymous()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"token":    token,
+		"userId":   user.ID,
+		"username": user.Username,
+		"chips":    user.Chips,
+		"isGuest":  true,
+	})
+}
+
+func (s *Server) getLeaderboardSetting(w http.ResponseWriter, r *http.Request) {
+	val := s.store.GetSetting("leaderboard_visible")
+	visible := val != "false" // default visible
+	writeJSON(w, http.StatusOK, map[string]interface{}{"visible": visible})
+}
+
+func (s *Server) setLeaderboardSetting(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	user, ok := s.store.ValidateToken(token)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "未授权"})
+		return
+	}
+	if !s.store.IsAdmin(user.ID) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "仅管理员可操作"})
+		return
+	}
+	var body struct {
+		Visible bool `json:"visible"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "参数错误"})
+		return
+	}
+	val := "true"
+	if !body.Visible {
+		val = "false"
+	}
+	s.store.SetSetting("leaderboard_visible", val)
+	writeJSON(w, http.StatusOK, map[string]interface{}{"visible": body.Visible})
+}
+
+func (s *Server) checkAdmin(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	user, ok := s.store.ValidateToken(token)
+	if !ok {
+		writeJSON(w, http.StatusOK, map[string]interface{}{"isAdmin": false})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"isAdmin": s.store.IsAdmin(user.ID)})
 }

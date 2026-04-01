@@ -64,6 +64,20 @@ async function doAuth() {
   });
 });
 
+async function doAnonymous() {
+  const errEl = document.getElementById('authError');
+  errEl.textContent = '';
+  try {
+    const res = await fetch(API + '/auth/anonymous', { method: 'POST' });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; return; }
+    saveSession(data);
+    showLobby();
+  } catch (e) {
+    errEl.textContent = '网络错误: ' + e.message;
+  }
+}
+
 function logout() {
   clearSession();
   document.getElementById('lobbyPage').style.display  = 'none';
@@ -94,7 +108,7 @@ function showLobby() {
     })
     .catch(() => {});
   loadRooms();
-  loadLeaderboard();
+  checkLeaderboardVisibility();
   loadMyHands();
   checkRejoin();
 
@@ -194,6 +208,63 @@ function dismissRejoin() {
 }
 
 // ===== Leaderboard =====
+async function checkLeaderboardVisibility() {
+  if (!currentUser) return;
+  try {
+    const [settingRes, adminRes] = await Promise.all([
+      fetch(`${API}/settings/leaderboard`),
+      fetch(`${API}/auth/admin?token=${encodeURIComponent(currentUser.token)}`)
+    ]);
+    const setting = await settingRes.json();
+    const admin = await adminRes.json();
+    const section = document.getElementById('leaderboardSection');
+    const isAdmin = admin.isAdmin;
+
+    if (setting.visible) {
+      section.style.display = '';
+      loadLeaderboard();
+    } else {
+      section.style.display = 'none';
+    }
+
+    // Admin toggle button
+    if (isAdmin) {
+      let toggleBtn = document.getElementById('lbToggleBtn');
+      if (!toggleBtn) {
+        const header = section.querySelector('.sec-header');
+        toggleBtn = document.createElement('button');
+        toggleBtn.id = 'lbToggleBtn';
+        toggleBtn.className = 'btn btn-ghost btn-sm';
+        header.appendChild(toggleBtn);
+      }
+      toggleBtn.textContent = setting.visible ? '隐藏排行榜' : '显示排行榜';
+      toggleBtn.onclick = () => toggleLeaderboard(!setting.visible);
+      // If hidden, still show section for admin with a message
+      if (!setting.visible) {
+        section.style.display = '';
+        document.getElementById('lbTbody').innerHTML =
+          '<tr><td colspan="6" style="color:#666;text-align:center;padding:18px">排行榜已关闭</td></tr>';
+      }
+    }
+  } catch (e) {
+    console.error('leaderboard setting error', e);
+    loadLeaderboard(); // fallback: show it
+  }
+}
+
+async function toggleLeaderboard(visible) {
+  try {
+    await fetch(`${API}/settings/leaderboard?token=${encodeURIComponent(currentUser.token)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible })
+    });
+    checkLeaderboardVisibility();
+  } catch (e) {
+    console.error('toggle leaderboard error', e);
+  }
+}
+
 async function loadLeaderboard() {
   if (!currentUser) return;
   try {

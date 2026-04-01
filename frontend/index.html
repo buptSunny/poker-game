@@ -43,6 +43,7 @@
       </div>
       <div class="auth-error" id="authError"></div>
       <button class="auth-btn" id="authBtn" onclick="doAuth()">登 录</button>
+      <button class="auth-btn" style="margin-top:10px;background:linear-gradient(135deg,#6b7280,#4b5563);box-shadow:none" onclick="doAnonymous()">匿名游戏</button>
       <div class="auth-toggle" id="authToggle" onclick="toggleAuthMode()">没有账号？点此注册</div>
     </div>
   </div>
@@ -124,7 +125,7 @@
   </div>
 
   <!-- Leaderboard -->
-  <div class="section-card">
+  <div class="section-card" id="leaderboardSection">
     <div class="sec-header">
       <span class="sec-title">🏆 排行榜</span>
     </div>

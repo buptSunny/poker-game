@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -22,6 +23,7 @@ type User struct {
 	HandsWon    int
 	TotalWon    int
 	BiggestPot  int
+	IsGuest     bool
 }
 
 // HandRecord is stored in the hands table.
@@ -98,9 +100,16 @@ func NewStore(path string) (*Store, error) {
 		"ALTER TABLE users ADD COLUMN hands_won    INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE users ADD COLUMN total_won    INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE users ADD COLUMN biggest_pot  INTEGER NOT NULL DEFAULT 0",
+		"ALTER TABLE users ADD COLUMN is_guest     INTEGER NOT NULL DEFAULT 0",
 	} {
 		db.Exec(col) // ignore error if column already exists
 	}
+
+	// Settings table (key-value store)
+	db.Exec(`CREATE TABLE IF NOT EXISTS settings (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	)`)
 
 	return &Store{db: db}, nil
 }
@@ -179,15 +188,17 @@ func (s *Store) newSession(userID string) (string, error) {
 
 func (s *Store) ValidateToken(token string) (*User, bool) {
 	row := s.db.QueryRow(
-		`SELECT u.id, u.username, u.chips, u.hands_played, u.hands_won, u.total_won, u.biggest_pot
+		`SELECT u.id, u.username, u.chips, u.hands_played, u.hands_won, u.total_won, u.biggest_pot, u.is_guest
 		 FROM sessions s JOIN users u ON s.user_id = u.id
 		 WHERE s.token=? AND s.expires_at>?`,
 		token, time.Now().Unix(),
 	)
 	var u User
-	if err := row.Scan(&u.ID, &u.Username, &u.Chips, &u.HandsPlayed, &u.HandsWon, &u.TotalWon, &u.BiggestPot); err != nil {
+	var isGuest int
+	if err := row.Scan(&u.ID, &u.Username, &u.Chips, &u.HandsPlayed, &u.HandsWon, &u.TotalWon, &u.BiggestPot, &isGuest); err != nil {
 		return nil, false
 	}
+	u.IsGuest = isGuest == 1
 	return &u, true
 }
 
@@ -213,9 +224,9 @@ func (s *Store) RecordHand(roomID string, pot int, community string, players []H
 	); err != nil {
 		return err
 	}
-	// Update stats for each player
+	// Update stats for each player (skip guests)
 	for _, p := range players {
-		if p.PlayerID == "" {
+		if p.PlayerID == "" || strings.HasPrefix(p.PlayerID, "g_") {
 			continue
 		}
 		wonFlag := 0
@@ -314,4 +325,61 @@ func (s *Store) RecentHands(roomID string, limit int) ([]map[string]interface{},
 		})
 	}
 	return result, nil
+}
+
+// IsAdmin checks if the user is the first registered user (admin).
+func (s *Store) IsAdmin(userID string) bool {
+	var firstID string
+	err := s.db.QueryRow(`SELECT id FROM users WHERE is_guest=0 ORDER BY rowid ASC LIMIT 1`).Scan(&firstID)
+	return err == nil && firstID == userID
+}
+
+// GetSetting reads a setting value. Returns empty string if not found.
+func (s *Store) GetSetting(key string) string {
+	var val string
+	s.db.QueryRow(`SELECT value FROM settings WHERE key=?`, key).Scan(&val)
+	return val
+}
+
+// SetSetting writes a setting value.
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+		key, value,
+	)
+	return err
+}
+
+// Anonymous name generation
+var (
+	adjectives = []string{"飞翔的", "快乐的", "勇敢的", "神秘的", "幸运的", "闪亮的", "沉默的", "狂野的", "冷静的", "燃烧的"}
+	animals    = []string{"熊猫", "老虎", "白鹤", "青龙", "凤凰", "麒麟", "飞鹰", "银狐", "金蟾", "黑豹"}
+)
+
+// RegisterAnonymous creates a temporary guest user with a random Chinese name.
+func (s *Store) RegisterAnonymous() (*User, string, error) {
+	b := make([]byte, 2)
+	rand.Read(b)
+	adj := adjectives[int(b[0])%len(adjectives)]
+	animal := animals[int(b[1])%len(animals)]
+	username := adj + animal
+
+	// Add random suffix to avoid collision
+	suffix := randomHex(2)
+	username = username + suffix
+
+	id := "g_" + randomHex(6)
+	if _, err := s.db.Exec(
+		`INSERT INTO users (id, username, password_hash, chips, is_guest) VALUES (?, ?, '', ?, 1)`,
+		id, username, startingChips,
+	); err != nil {
+		return nil, "", fmt.Errorf("创建匿名用户失败")
+	}
+
+	u := &User{ID: id, Username: username, Chips: startingChips, IsGuest: true}
+	token, err := s.newSession(id)
+	if err != nil {
+		return nil, "", err
+	}
+	return u, token, nil
 }
