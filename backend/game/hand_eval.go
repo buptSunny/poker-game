@@ -22,10 +22,16 @@ var handNames = map[int]string{
 	FullHouse: "葫芦", FourOfAKind: "四条", StraightFlush: "同花顺", RoyalFlush: "皇家同花顺",
 }
 
+var rankNames = map[int]string{
+	2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9",
+	10: "10", 11: "J", 12: "Q", 13: "K", 14: "A",
+}
+
 type HandResult struct {
 	Rank     int
 	RankName string
-	Tiebreak []int // for comparison
+	RankDesc string // detailed description, e.g. "一对K (Q J 9)"
+	Tiebreak []int  // for comparison
 	BestFive []Card
 }
 
@@ -84,7 +90,83 @@ func evaluate5(cards []Card) HandResult {
 		tiebreak = rankList(cards)
 	}
 
-	return HandResult{Rank: rank, RankName: handNames[rank], Tiebreak: tiebreak, BestFive: cards}
+	return HandResult{Rank: rank, RankName: handNames[rank], RankDesc: buildRankDesc(rank, cards, groups), Tiebreak: tiebreak, BestFive: cards}
+}
+
+// buildRankDesc creates a human-readable description of the hand.
+func buildRankDesc(rank int, cards []Card, groups map[int]int) string {
+	rn := func(r int) string { return rankNames[r] }
+
+	// collect ranks by group size
+	type rg struct{ rank, count int }
+	var rgs []rg
+	for r, c := range groups {
+		rgs = append(rgs, rg{r, c})
+	}
+	sort.Slice(rgs, func(i, j int) bool {
+		if rgs[i].count != rgs[j].count {
+			return rgs[i].count > rgs[j].count
+		}
+		return rgs[i].rank > rgs[j].rank
+	})
+
+	// kickers: ranks not part of the main group(s)
+	kickers := func(skipCounts ...int) string {
+		skip := map[int]bool{}
+		for _, c := range skipCounts {
+			for _, g := range rgs {
+				if g.count == c && !skip[g.rank] {
+					skip[g.rank] = true
+					break
+				}
+			}
+		}
+		var ks []string
+		for _, g := range rgs {
+			if !skip[g.rank] {
+				ks = append(ks, rn(g.rank))
+			}
+		}
+		if len(ks) == 0 {
+			return ""
+		}
+		result := " ("
+		for i, k := range ks {
+			if i > 0 {
+				result += " "
+			}
+			result += k
+		}
+		return result + "踢脚)"
+	}
+
+	switch rank {
+	case RoyalFlush:
+		return "皇家同花顺"
+	case StraightFlush:
+		return "同花顺 到" + rn(cards[0].Rank)
+	case FourOfAKind:
+		return "四条" + rn(rgs[0].rank) + kickers(4)
+	case FullHouse:
+		return "葫芦 " + rn(rgs[0].rank) + "满" + rn(rgs[1].rank)
+	case Flush:
+		return "同花 " + rn(cards[0].Rank) + "高"
+	case Straight:
+		high := cards[0].Rank
+		// wheel: A-2-3-4-5
+		if cards[0].Rank == 14 && cards[1].Rank == 5 {
+			high = 5
+		}
+		return "顺子 到" + rn(high)
+	case ThreeOfAKind:
+		return "三条" + rn(rgs[0].rank) + kickers(3)
+	case TwoPair:
+		return "两对 " + rn(rgs[0].rank) + "和" + rn(rgs[1].rank) + kickers(2, 2)
+	case OnePair:
+		return "一对" + rn(rgs[0].rank) + kickers(2)
+	default:
+		return "高牌 " + rn(cards[0].Rank)
+	}
 }
 
 func isFlush(cards []Card) bool {

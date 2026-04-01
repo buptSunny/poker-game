@@ -630,24 +630,26 @@ func computePots(allPlayers []*PlayerState) []sidePot {
 }
 
 type ShowdownResult struct {
-	PlayerID string     `json:"playerId"`
-	Name     string     `json:"name"`
-	Hand     []Card     `json:"hand"`
-	HandRank string     `json:"handRank"`
-	Won      int        `json:"won"`
-	Bet      int        `json:"bet"`
-	Net      int        `json:"net"` // chips_after - chips_before
-	IsWinner bool       `json:"isWinner"`
+	PlayerID string `json:"playerId"`
+	Name     string `json:"name"`
+	Hand     []Card `json:"hand"`
+	HandRank string `json:"handRank"`
+	HandDesc string `json:"handDesc"` // detailed, e.g. "一对K (Q J 9踢脚)"
+	Won      int    `json:"won"`
+	Bet      int    `json:"bet"`
+	Net      int    `json:"net"` // chips_after - chips_before
+	IsWinner bool   `json:"isWinner"`
 }
 
 // PotDetail describes one pot (main or side) and who won it.
 type PotDetail struct {
-	Label       string   `json:"label"`       // e.g. "主池", "边池1"
-	Amount      int      `json:"amount"`
-	Winners     []string `json:"winners"`     // winner names
-	WinnerIDs   []string `json:"winnerIds"`
-	HandRank    string   `json:"handRank"`    // winning hand description
-	Eligible    []string `json:"eligible"`    // all eligible player names
+	Label    string   `json:"label"`    // e.g. "主池", "边池1"
+	Amount   int      `json:"amount"`
+	Winners  []string `json:"winners"`  // winner names
+	WinnerIDs []string `json:"winnerIds"`
+	HandRank string   `json:"handRank"` // winning hand description
+	Eligible []string `json:"eligible"` // all eligible player names
+	Reason   string   `json:"reason"`   // detailed explanation of why winner won
 }
 
 func (g *Game) doShowdown() {
@@ -732,13 +734,66 @@ func (g *Game) doShowdown() {
 		for i, e := range pe {
 			eligibleNames[i] = e.p.Name
 		}
+
+		// Build detailed reason
+		reason := ""
+		if len(potWinners) > 1 {
+			// Split pot
+			reason = fmt.Sprintf("平分 — 均为%s", best.RankDesc)
+		} else if len(pe) == 1 {
+			// Only one eligible player
+			reason = fmt.Sprintf("%s 为唯一参与者，自动获得", potWinners[0].Name)
+		} else {
+			// Explain comparison
+			winnerEval := pe[0]
+			for _, e := range pe {
+				if e.p.ID == potWinners[0].ID {
+					winnerEval = e
+					break
+				}
+			}
+			// Find the best losing hand
+			var bestLoser *potEval
+			for i, e := range pe {
+				isWinner := false
+				for _, w := range potWinners {
+					if e.p.ID == w.ID {
+						isWinner = true
+						break
+					}
+				}
+				if !isWinner {
+					if bestLoser == nil || e.result.Rank > bestLoser.result.Rank ||
+						(e.result.Rank == bestLoser.result.Rank && compareTiebreak(e.result.Tiebreak, bestLoser.result.Tiebreak) > 0) {
+						bestLoser = &pe[i]
+					}
+				}
+			}
+			if bestLoser != nil {
+				if winnerEval.result.Rank > bestLoser.result.Rank {
+					// Different hand rank
+					reason = fmt.Sprintf("%s 的 %s > %s 的 %s",
+						potWinners[0].Name, winnerEval.result.RankDesc,
+						bestLoser.p.Name, bestLoser.result.RankDesc)
+				} else {
+					// Same rank, tiebreak difference
+					reason = fmt.Sprintf("%s 的 %s > %s 的 %s",
+						potWinners[0].Name, winnerEval.result.RankDesc,
+						bestLoser.p.Name, bestLoser.result.RankDesc)
+				}
+			} else {
+				reason = fmt.Sprintf("%s 以 %s 获胜", potWinners[0].Name, winnerEval.result.RankDesc)
+			}
+		}
+
 		potDetails = append(potDetails, PotDetail{
-			Label:    label,
-			Amount:   pot.Amount,
-			Winners:  winnerNames,
+			Label:     label,
+			Amount:    pot.Amount,
+			Winners:   winnerNames,
 			WinnerIDs: winnerIDs,
-			HandRank: best.RankName,
-			Eligible: eligibleNames,
+			HandRank:  best.RankDesc,
+			Eligible:  eligibleNames,
+			Reason:    reason,
 		})
 	}
 
@@ -751,6 +806,7 @@ func (g *Game) doShowdown() {
 			Name:     e.p.Name,
 			Hand:     e.p.Hand,
 			HandRank: e.result.RankName,
+			HandDesc: e.result.RankDesc,
 			Won:      wonMap[e.p.ID],
 			Bet:      e.p.TotalBet,
 			Net:      e.p.Chips - e.p.ChipsBefore,

@@ -362,19 +362,23 @@ function showShowdown(payload) {
   const potsEl = document.getElementById('potBreakdown');
   if (potsEl) potsEl.remove();
   const pots = payload.pots || [];
-  if (pots.length > 1) {
+  if (pots.length > 0) {
     const breakdown = document.createElement('div');
     breakdown.id = 'potBreakdown';
     breakdown.style.cssText = 'margin-bottom:12px;text-align:left;font-size:.85rem;background:rgba(0,0,0,0.3);padding:10px 14px;border-radius:8px;';
-    let html = '<div style="font-weight:bold;margin-bottom:6px;text-align:center;color:#f0c040">边池分配说明</div>';
+    let html = '';
+    if (pots.length > 1) {
+      html += '<div style="font-weight:bold;margin-bottom:6px;text-align:center;color:#f0c040">边池分配说明</div>';
+    }
     pots.forEach(pot => {
-      const winnersStr = pot.winners.join('、');
-      const eligibleStr = pot.eligible.join('、');
-      html += `<div style="margin-bottom:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.1)">`;
-      html += `<span style="color:#2ecc71;font-weight:bold">${esc(pot.label)}</span>`;
-      html += ` <span style="color:#f0c040">${pot.amount}</span> 筹码`;
-      html += ` — 参与者: ${esc(eligibleStr)}`;
-      html += `<br>→ <strong>${esc(winnersStr)}</strong> 以 <span style="color:#e67e22">${esc(pot.handRank)}</span> 赢得`;
+      html += `<div style="margin-bottom:6px;padding:4px 0;${pots.length > 1 ? 'border-bottom:1px solid rgba(255,255,255,0.1)' : ''}">`;
+      if (pots.length > 1) {
+        const eligibleStr = pot.eligible.join('、');
+        html += `<span style="color:#2ecc71;font-weight:bold">${esc(pot.label)}</span>`;
+        html += ` <span style="color:#f0c040">${pot.amount}</span> 筹码`;
+        html += ` — 参与者: ${esc(eligibleStr)}<br>`;
+      }
+      html += `<span style="color:#aaa">→</span> ${esc(pot.reason)}`;
       html += `</div>`;
     });
     breakdown.innerHTML = html;
@@ -399,7 +403,7 @@ function showShowdown(payload) {
       <div class="rname">${r.isWinner ? '🏆 ' : ''}${esc(r.name)}</div>
     `;
     row.appendChild(cards);
-    row.innerHTML += `<div class="rhand">${esc(r.handRank || '')}</div>
+    row.innerHTML += `<div class="rhand">${esc(r.handDesc || r.handRank || '')}</div>
       <div class="rwon">${r.won > 0 ? '+' + r.won : ''}</div>`;
     el.appendChild(row);
   });
