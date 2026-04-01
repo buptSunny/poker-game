@@ -366,7 +366,7 @@ func (g *Game) applyAction(p *PlayerState, action string, amount int) error {
 			return fmt.Errorf("nothing to call")
 		}
 		actual := callAmount
-		if actual > p.Chips {
+		if actual >= p.Chips {
 			actual = p.Chips
 			p.AllIn = true
 		}
