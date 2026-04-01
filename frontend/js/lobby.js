@@ -101,8 +101,8 @@ function showLobby() {
   // Auto-fill room ID from share link (?join=XXXX)
   const joinParam = new URLSearchParams(location.search).get('join');
   if (joinParam) {
-    document.getElementById('joinRoomId').value = joinParam;
     history.replaceState({}, '', location.pathname);
+    enterRoom(joinParam);
   }
 }
 
@@ -243,10 +243,15 @@ async function loadMyHands() {
 }
 
 function cardStr(c) {
-  if (!c || !c.suit) return '';
-  const suits = { S:'♠', H:'♥', D:'♦', C:'♣' };
-  const isRed = c.suit === 'H' || c.suit === 'D';
-  return `<span class="mini-card ${isRed ? 'red' : 'black'}">${suits[c.suit]}${c.rank}</span>`;
+  if (!c) return '';
+  const suit = (c.Suit || c.suit || '').toLowerCase();
+  const rank = c.Rank || c.rank;
+  const suits = { s:'♠', h:'♥', d:'♦', c:'♣' };
+  const ranks = { 14:'A', 13:'K', 12:'Q', 11:'J' };
+  const isRed = suit === 'h' || suit === 'd';
+  const symbol = suits[suit] || suit;
+  const label = ranks[rank] || String(rank);
+  return `<span class="mini-card ${isRed ? 'red' : 'black'}">${symbol}${label}</span>`;
 }
 
 function renderHand(h, myUserId) {
