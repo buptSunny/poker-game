@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 	"time"
@@ -980,10 +981,17 @@ func (g *Game) broadcastYourTurn() {
 					g.turnTimer = nil
 				}
 				action, amount := decideBotAction(g, p)
-				if err := g.applyAction(p, action, amount); err == nil {
-					g.broadcastState()
-					g.checkAdvance()
+				if err := g.applyAction(p, action, amount); err != nil {
+					// fallback: try call, then check, then fold
+					log.Printf("bot %s action %s failed: %v, trying fallback", p.Name, action, err)
+					if err2 := g.applyAction(p, "call", 0); err2 != nil {
+						if err3 := g.applyAction(p, "check", 0); err3 != nil {
+							g.applyAction(p, "fold", 0)
+						}
+					}
 				}
+				g.broadcastState()
+				g.checkAdvance()
 			}
 		})
 		return
