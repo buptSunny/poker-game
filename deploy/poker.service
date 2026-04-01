@@ -1,0 +1,14 @@
+[Unit]
+Description=Texas Holdem Poker Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/poker/backend
+ExecStart=/opt/poker/backend/poker_server_linux
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Texas Hold'em</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Auth -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-visual">
+    <div class="auth-visual-inner">
+      <div class="av-suits">
+        <span class="av-suit black">♠</span>
+        <span class="av-suit red">♥</span>
+        <span class="av-suit red">♦</span>
+        <span class="av-suit black">♣</span>
+      </div>
+      <h1 class="av-title">Texas<br>Hold'em</h1>
+      <p class="av-sub">与朋友一起，赢得每一局</p>
+      <div class="av-cards">
+        <div class="av-card black">A<span>♠</span></div>
+        <div class="av-card red">K<span>♥</span></div>
+        <div class="av-card black">Q<span>♣</span></div>
+        <div class="av-card red">J<span>♦</span></div>
+        <div class="av-card back"></div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-form-panel">
+    <div class="auth-box">
+      <h2 id="authTitle">欢迎回来</h2>
+      <p class="auth-hint" id="authSub">登录你的账号继续游戏</p>
+      <div class="auth-field">
+        <label>用户名</label>
+        <input type="text" id="authUsername" placeholder="输入用户名" maxlength="16" autocomplete="username">
+      </div>
+      <div class="auth-field">
+        <label>密码</label>
+        <input type="password" id="authPassword" placeholder="输入密码" maxlength="32" autocomplete="current-password">
+      </div>
+      <div class="auth-error" id="authError"></div>
+      <button class="auth-btn" id="authBtn" onclick="doAuth()">登 录</button>
+      <div class="auth-toggle" id="authToggle" onclick="toggleAuthMode()">没有账号？点此注册</div>
+    </div>
+  </div>
+</div>
+
+<!-- Lobby -->
+<div class="lobby" id="lobbyPage" style="display:none">
+  <div class="lobby-hero">
+    <h1>♠ Texas Hold'em ♦</h1>
+    <p class="subtitle">在线多人德州扑克</p>
+  </div>
+
+  <!-- User bar -->
+  <div class="user-bar">
+    <div class="avatar" id="ubarAvatar">-</div>
+    <div class="uinfo">
+      <div class="uname" id="ubarName">-</div>
+      <div class="ustats" id="ubarStats"></div>
+    </div>
+    <div class="chips-badge" id="ubarChips">-</div>
+    <button class="btn btn-ghost btn-sm" onclick="location.href='profile.html'">我的</button>
+    <button class="logout-btn" onclick="logout()">退出</button>
+  </div>
+
+  <!-- Rejoin banner -->
+  <div class="rejoin-banner" id="rejoinBanner">
+    <span>⚡ 你还有一局进行中</span>
+    <div class="rbtns">
+      <button class="btn btn-green btn-sm" onclick="rejoinGame()">重新连线</button>
+      <button class="btn btn-ghost btn-sm" onclick="dismissRejoin()">忽略</button>
+    </div>
+  </div>
+
+  <!-- Create / Join -->
+  <div class="cards-row">
+    <div class="card-box">
+      <div class="box-title">♦ 创建房间</div>
+      <div class="form-row">
+        <label>座位数</label>
+        <select id="maxPlayers">
+          <option value="2">2 人</option>
+          <option value="4">4 人</option>
+          <option value="6" selected>6 人</option>
+          <option value="9">9 人</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>小盲注</label>
+        <input type="number" id="smallBlind" value="10" min="1" max="500">
+      </div>
+      <div class="form-row">
+        <label>初始筹码</label>
+        <input type="number" id="startingChips" value="1000" min="100" max="100000" step="100">
+      </div>
+      <button class="btn btn-green btn-block" onclick="createRoom()">创 建 房 间</button>
+    </div>
+    <div class="card-box">
+      <div class="box-title">♣ 加入房间</div>
+      <div class="form-row">
+        <label>房间号</label>
+        <input type="text" class="room-input" id="joinRoomId" placeholder="输入房间号" maxlength="8">
+      </div>
+      <button class="btn btn-blue btn-block" onclick="joinRoom()" style="margin-top:28px">加 入 房 间</button>
+    </div>
+  </div>
+
+  <!-- Room list -->
+  <div class="section-card">
+    <div class="sec-header">
+      <span class="sec-title">当前房间</span>
+      <button class="btn btn-ghost btn-sm" onclick="loadRooms()">刷新</button>
+    </div>
+    <table>
+      <thead><tr><th>房间号</th><th>人数</th><th>盲注</th><th>初始筹码</th><th>状态</th><th></th></tr></thead>
+      <tbody id="roomTbody">
+        <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Leaderboard -->
+  <div class="section-card">
+    <div class="sec-header">
+      <span class="sec-title">🏆 排行榜</span>
+    </div>
+    <table>
+      <thead><tr><th>#</th><th>玩家</th><th>筹码</th><th>胜/总局</th><th>总赢</th><th>最大底池</th></tr></thead>
+      <tbody id="lbTbody">
+        <tr><td colspan="6" style="color:var(--muted);text-align:center;padding:18px">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Hand history preview -->
+  <div class="section-card">
+    <div class="sec-header">
+      <span class="sec-title">🃏 最近对局</span>
+      <button class="btn btn-ghost btn-sm" onclick="location.href='profile.html'">查看全部 →</button>
+    </div>
+    <div id="myHandsList" style="color:var(--muted);text-align:center;padding:18px">加载中...</div>
+  </div>
+</div>
+
+<script src="js/lobby.js"></script>
+</body>
+</html>

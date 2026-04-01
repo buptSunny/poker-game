@@ -1,0 +1,9 @@
+# Binaries
+backend/poker_server
+backend/poker_server_linux
+
+# Database
+data/*.db
+
+# OS
+.DS_Store

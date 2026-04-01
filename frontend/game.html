@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Texas Hold'em</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="game-wrap">
+
+  <div class="game-header">
+    <span class="hdr-info">房间 <strong id="hdrRoom">-</strong> &nbsp;|&nbsp; 盲注 <strong id="hdrBlinds">-</strong></span>
+    <div class="hdr-pot">底池 <span id="hdrPot">0</span></div>
+    <div class="hdr-actions">
+      <button class="btn btn-ghost btn-sm" onclick="shareRoom()" title="分享房间">分享</button>
+      <button class="btn btn-fold btn-sm" onclick="leaveGame()">离开</button>
+    </div>
+  </div>
+
+  <div class="table-area">
+    <div class="felt">
+      <div class="community-area" id="communityCards"></div>
+      <div class="pot-display">底池: <span id="potAmount">0</span></div>
+      <div class="seats" id="seats"></div>
+    </div>
+  </div>
+
+  <div class="action-bar">
+    <div class="status-msg" id="statusMsg">等待其他玩家加入...</div>
+    <div class="your-hand" id="myHand"></div>
+    <div id="timerWrap" style="max-width:280px;margin:0 auto 8px" hidden>
+      <div class="timer-bar"><div class="timer-fill" id="timerFill"></div></div>
+    </div>
+    <div class="action-buttons" id="actionButtons"></div>
+  </div>
+
+  <div class="chat-area">
+    <div class="chat-messages" id="chatMessages"></div>
+    <div class="chat-input-row">
+      <input type="text" id="chatInput" placeholder="发消息..." maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
+      <button class="chat-send-btn" onclick="sendChat()">发送</button>
+    </div>
+  </div>
+
+</div>
+
+<div class="showdown-overlay" id="showdownOverlay">
+  <div class="showdown-box">
+    <h2>本局结果</h2>
+    <div id="communityResult" style="display:flex;gap:6px;justify-content:center;margin-bottom:14px"></div>
+    <div id="showdownResults"></div>
+    <button class="btn btn-ready" style="margin-top:16px;padding:10px 28px" onclick="closeShowdown()">确 认 结 果</button>
+  </div>
+</div>
+
+<script src="js/ws.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
