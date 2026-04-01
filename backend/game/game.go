@@ -971,28 +971,44 @@ func (g *Game) broadcastYourTurn() {
 
 	// bot: auto-act after a short think delay
 	if p.IsBot {
+		botID := p.ID
+		botName := p.Name
+		expectedIdx := g.CurrentIdx
+		log.Printf("bot %s (idx=%d) scheduling action in %v", botName, expectedIdx, botThinkDelay())
 		time.AfterFunc(botThinkDelay(), func() {
 			g.mu.Lock()
 			defer g.mu.Unlock()
-			// ensure it's still this bot's turn
-			if g.CurrentIdx < len(g.Players) && g.Players[g.CurrentIdx].ID == p.ID && !p.Folded {
-				if g.turnTimer != nil {
-					g.turnTimer.Stop()
-					g.turnTimer = nil
-				}
-				action, amount := decideBotAction(g, p)
-				if err := g.applyAction(p, action, amount); err != nil {
-					// fallback: try call, then check, then fold
-					log.Printf("bot %s action %s failed: %v, trying fallback", p.Name, action, err)
-					if err2 := g.applyAction(p, "call", 0); err2 != nil {
-						if err3 := g.applyAction(p, "check", 0); err3 != nil {
-							g.applyAction(p, "fold", 0)
-						}
+			log.Printf("bot %s callback: currentIdx=%d, len(players)=%d, phase=%s",
+				botName, g.CurrentIdx, len(g.Players), g.Phase)
+			if g.CurrentIdx >= len(g.Players) {
+				log.Printf("bot %s: currentIdx out of range", botName)
+				return
+			}
+			cur := g.Players[g.CurrentIdx]
+			if cur.ID != botID {
+				log.Printf("bot %s: not my turn (current is %s)", botName, cur.Name)
+				return
+			}
+			if cur.Folded {
+				log.Printf("bot %s: already folded", botName)
+				return
+			}
+			if g.turnTimer != nil {
+				g.turnTimer.Stop()
+				g.turnTimer = nil
+			}
+			action, amount := decideBotAction(g, cur)
+			log.Printf("bot %s decided: %s %d", botName, action, amount)
+			if err := g.applyAction(cur, action, amount); err != nil {
+				log.Printf("bot %s action %s failed: %v, trying fallback", botName, action, err)
+				if err2 := g.applyAction(cur, "call", 0); err2 != nil {
+					if err3 := g.applyAction(cur, "check", 0); err3 != nil {
+						g.applyAction(cur, "fold", 0)
 					}
 				}
-				g.broadcastState()
-				g.checkAdvance()
 			}
+			g.broadcastState()
+			g.checkAdvance()
 		})
 		return
 	}
