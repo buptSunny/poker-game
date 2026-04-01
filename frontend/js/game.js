@@ -449,12 +449,31 @@ function sendChat() {
 // ===== Share room =====
 function shareRoom() {
   const url = `${location.origin}${location.pathname.replace('game.html', '')}index.html?join=${roomId}`;
-  navigator.clipboard.writeText(url).then(() => {
+  // Try modern clipboard API first, fall back to execCommand
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(url).then(() => {
+      showStatus('房间链接已复制到剪贴板！');
+      setTimeout(() => showStatus(''), 3000);
+    }).catch(() => copyFallback(url));
+  } else {
+    copyFallback(url);
+  }
+}
+
+function copyFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;opacity:0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
     showStatus('房间链接已复制到剪贴板！');
     setTimeout(() => showStatus(''), 3000);
-  }).catch(() => {
-    prompt('复制这个链接分享给朋友:', url);
-  });
+  } catch (_) {
+    prompt('复制这个链接分享给朋友:', text);
+  }
+  document.body.removeChild(ta);
 }
 
 // ===== Misc =====
