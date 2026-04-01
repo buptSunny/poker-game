@@ -137,7 +137,7 @@ func buildRankDesc(rank int, cards []Card, groups map[int]int) string {
 			}
 			result += k
 		}
-		return result + "踢脚)"
+		return result + ")"
 	}
 
 	switch rank {

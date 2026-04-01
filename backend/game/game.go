@@ -745,7 +745,7 @@ func (g *Game) doShowdown() {
 			// Only one eligible player
 			reason = fmt.Sprintf("%s 为唯一参与者，自动获得", potWinners[0].Name)
 		} else {
-			// Explain comparison
+			// Winner explanation
 			winnerEval := pe[0]
 			for _, e := range pe {
 				if e.p.ID == potWinners[0].ID {
@@ -753,38 +753,7 @@ func (g *Game) doShowdown() {
 					break
 				}
 			}
-			// Find the best losing hand
-			var bestLoser *potEval
-			for i, e := range pe {
-				isWinner := false
-				for _, w := range potWinners {
-					if e.p.ID == w.ID {
-						isWinner = true
-						break
-					}
-				}
-				if !isWinner {
-					if bestLoser == nil || e.result.Rank > bestLoser.result.Rank ||
-						(e.result.Rank == bestLoser.result.Rank && compareTiebreak(e.result.Tiebreak, bestLoser.result.Tiebreak) > 0) {
-						bestLoser = &pe[i]
-					}
-				}
-			}
-			if bestLoser != nil {
-				if winnerEval.result.Rank > bestLoser.result.Rank {
-					// Different hand rank
-					reason = fmt.Sprintf("%s 的 %s > %s 的 %s",
-						potWinners[0].Name, winnerEval.result.RankDesc,
-						bestLoser.p.Name, bestLoser.result.RankDesc)
-				} else {
-					// Same rank, tiebreak difference
-					reason = fmt.Sprintf("%s 的 %s > %s 的 %s",
-						potWinners[0].Name, winnerEval.result.RankDesc,
-						bestLoser.p.Name, bestLoser.result.RankDesc)
-				}
-			} else {
-				reason = fmt.Sprintf("%s 以 %s 获胜", potWinners[0].Name, winnerEval.result.RankDesc)
-			}
+			reason = fmt.Sprintf("%s 以 %s 胜出", potWinners[0].Name, winnerEval.result.RankDesc)
 		}
 
 		potDetails = append(potDetails, PotDetail{

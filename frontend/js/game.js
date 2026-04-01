@@ -88,6 +88,12 @@ function onGameState(state) {
     isMyTurn = false;
     clearActions();
     showStatus('结算中...');
+  } else {
+    // In-game: show whose turn it is
+    const cp = (state.players || [])[state.currentIdx];
+    if (cp && cp.id !== myId) {
+      showStatus(`等待 ${cp.name} 操作...`);
+    }
   }
 }
 
