@@ -42,7 +42,7 @@ echo ">>> [2/3] 同步文件到服务器..."
 $SSH "$SERVER" "mkdir -p /opt/poker/backend /opt/poker/frontend /opt/poker/data"
 eval $RSYNC "$BIN" "$SERVER:/opt/poker/backend/poker_server_linux" &
 eval $RSYNC "$SCRIPT_DIR/frontend/" "$SERVER:/opt/poker/frontend/" &
-eval $RSYNC "$SCRIPT_DIR/data/" "$SERVER:/opt/poker/data/" &
+eval $RSYNC --exclude='*.db' "$SCRIPT_DIR/data/" "$SERVER:/opt/poker/data/" &
 eval $RSYNC "$SCRIPT_DIR/deploy/nginx-poker.conf" "$SERVER:/etc/nginx/conf.d/poker.conf" &
 eval $RSYNC "$SCRIPT_DIR/deploy/poker.service" "$SERVER:/etc/systemd/system/poker.service" &
 wait

@@ -19,6 +19,7 @@ var upgrader = websocket.Upgrader{
 type client struct {
 	conn        *websocket.Conn
 	playerID    string
+	playerName  string
 	roomID      string
 	userID      string // empty if guest
 	send        chan []byte
@@ -160,11 +161,12 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := &client{
-		conn:     conn,
-		playerID: playerID,
-		roomID:   roomID,
-		userID:   userID,
-		send:     make(chan []byte, 64),
+		conn:       conn,
+		playerID:   playerID,
+		playerName: playerName,
+		roomID:     roomID,
+		userID:     userID,
+		send:       make(chan []byte, 64),
 	}
 	h.addClient(c)
 
@@ -262,7 +264,7 @@ func (c *client) readPump(h *Hub, room *game.Room) {
 				Message string `json:"message"`
 			}
 			json.Unmarshal(msg.Payload, &payload)
-			room.Game.SendChat(c.playerID, payload.Message)
+			room.Game.SendChat(c.playerName, payload.Message)
 		case "rebuy":
 			if err := room.Game.Rebuy(c.playerID, room.StartingChips); err != nil {
 				data, _ := json.Marshal(game.Message{Type: "error", Payload: map[string]string{"message": err.Error()}})
