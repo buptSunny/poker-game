@@ -224,9 +224,9 @@ func (s *Store) RecordHand(roomID string, pot int, community string, players []H
 	); err != nil {
 		return err
 	}
-	// Update stats for each player (skip guests)
+	// Update stats for each player
 	for _, p := range players {
-		if p.PlayerID == "" || strings.HasPrefix(p.PlayerID, "g_") {
+		if p.PlayerID == "" {
 			continue
 		}
 		wonFlag := 0
