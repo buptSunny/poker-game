@@ -242,8 +242,8 @@ func (c *client) readPump(h *Hub, room *game.Room) {
 		if err := json.Unmarshal(raw, &msg); err != nil {
 			continue
 		}
-		// spectators can only chat
-		if c.isSpectator && msg.Type != "chat" {
+		// spectators can only chat or join
+		if c.isSpectator && msg.Type != "chat" && msg.Type != "join" {
 			continue
 		}
 		switch msg.Type {
@@ -281,6 +281,21 @@ func (c *client) readPump(h *Hub, room *game.Room) {
 			} else if err := room.Game.KickPlayer(payload.PlayerID); err != nil {
 				data, _ := json.Marshal(game.Message{Type: "error", Payload: map[string]string{"message": err.Error()}})
 				c.send <- data
+			}
+		case "join":
+			if !c.isSpectator {
+				continue
+			}
+			chips := room.StartingChips
+			if chips <= 0 {
+				chips = 1000
+			}
+			if err := room.Game.AddPlayer(c.playerID, c.playerName, chips); err != nil {
+				data, _ := json.Marshal(game.Message{Type: "error", Payload: map[string]string{"message": err.Error()}})
+				c.send <- data
+			} else {
+				c.isSpectator = false
+				sendWSMsg(c.conn, game.Message{Type: "spectator", Payload: map[string]bool{"spectating": false}})
 			}
 		}
 	}

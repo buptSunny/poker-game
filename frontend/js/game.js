@@ -62,6 +62,9 @@ function onSpectator(payload) {
   if (isSpectator) {
     showStatus('👁 观战模式 — 你正在观看这局游戏');
     document.getElementById('actionButtons').innerHTML = '';
+  } else {
+    // Promoted from spectator to player, re-render current state
+    if (gameState) onGameState(gameState);
   }
 }
 
@@ -75,7 +78,12 @@ function onGameState(state) {
   renderSeats(state);
 
   if (isSpectator) {
-    showStatus('👁 观战模式 — 你正在观看这局游戏');
+    if (state.phase === 'waiting') {
+      showStatus('👁 正在加入游戏...');
+      sock.send('join', {});
+    } else {
+      showStatus('👁 观战模式 — 你正在观看这局游戏');
+    }
     return;
   }
 
