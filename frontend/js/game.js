@@ -53,6 +53,7 @@ function handleMessage(msg) {
     case 'showdown':   onShowdown(msg.payload); break;
     case 'chat':       onChat(msg.payload); break;
     case 'spectator':  onSpectator(msg.payload); break;
+    case 'emoji':      onEmoji(msg.payload); break;
     case 'error':      showStatus('⚠ ' + msg.payload.message, true); break;
   }
 }
@@ -76,6 +77,7 @@ function onGameState(state) {
 
   renderCommunity(state.community || []);
   renderSeats(state);
+  checkBetAnimations(state);
 
   if (isSpectator) {
     if (state.phase === 'waiting') {
@@ -163,18 +165,57 @@ function renderCardBack(small) {
   return div;
 }
 
+let prevCommunityCount = 0; // track for animation
+
 function renderCommunity(cards) {
   const el = document.getElementById('communityCards');
-  el.innerHTML = '';
-  for (let i = 0; i < 5; i++) {
-    if (cards[i]) {
-      el.appendChild(renderCard(cards[i]));
-    } else {
+  const newCount = cards.filter(Boolean).length;
+
+  // Only animate newly revealed cards
+  if (newCount > prevCommunityCount) {
+    // Keep existing cards, only add new ones
+    for (let i = prevCommunityCount; i < 5; i++) {
+      const existing = el.children[i];
+      if (cards[i] && existing) {
+        // Replace placeholder with flip animation
+        const container = document.createElement('div');
+        container.className = 'card-flip-container';
+        container.style.cssText = `width:50px;height:72px;`;
+
+        const inner = document.createElement('div');
+        inner.className = 'card-flip-inner';
+        inner.style.cssText = 'width:100%;height:100%;';
+
+        const back = document.createElement('div');
+        back.className = 'card card-back card-flip-back';
+        back.textContent = '🂠';
+
+        const front = renderCard(cards[i]);
+        front.classList.add('card-flip-front');
+
+        inner.appendChild(back);
+        inner.appendChild(front);
+        container.appendChild(inner);
+
+        el.replaceChild(container, existing);
+
+        // Trigger flip after brief delay (stagger per card)
+        setTimeout(() => inner.classList.add('flipped'), 80 * (i - prevCommunityCount));
+      }
+    }
+    prevCommunityCount = newCount;
+  } else if (newCount === 0) {
+    // Fresh hand — reset everything
+    prevCommunityCount = 0;
+    el.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
       const ph = document.createElement('div');
       ph.className = 'card card-back';
       ph.style.opacity = '0.25';
       el.appendChild(ph);
     }
+  } else if (newCount === prevCommunityCount) {
+    // No change, don't re-render
   }
 }
 
@@ -245,9 +286,19 @@ function renderSeats(state) {
       // my cards shown in action bar, show backs here too if in game
     } else if (p.hand && p.hand.length > 0) {
       // showdown reveal
-      p.hand.forEach(c => cards.appendChild(renderCard(c, true)));
+      p.hand.forEach((c, ci) => {
+        const card = renderCard(c, true);
+        card.classList.add('deal-anim');
+        card.style.animationDelay = `${ci * 0.1}s`;
+        cards.appendChild(card);
+      });
     } else if (p.cardCount > 0 && !p.folded) {
-      for (let k = 0; k < p.cardCount; k++) cards.appendChild(renderCardBack(true));
+      for (let k = 0; k < p.cardCount; k++) {
+        const card = renderCardBack(true);
+        card.classList.add('deal-anim');
+        card.style.animationDelay = `${k * 0.1}s`;
+        cards.appendChild(card);
+      }
     }
 
     seat.appendChild(cards);
@@ -259,7 +310,12 @@ function renderSeats(state) {
 function renderMyHand() {
   const el = document.getElementById('myHand');
   el.innerHTML = '';
-  myHand.forEach(c => el.appendChild(renderCard(c)));
+  myHand.forEach((c, i) => {
+    const card = renderCard(c);
+    card.classList.add('deal-anim');
+    card.style.animationDelay = `${i * 0.15}s`;
+    el.appendChild(card);
+  });
 }
 
 // ===== Actions =====
@@ -367,6 +423,7 @@ function doAction(action, amount) {
 // ===== Showdown =====
 function showShowdown(payload) {
   const overlay = document.getElementById('showdownOverlay');
+  // Trigger reflow then add active for CSS transition
   overlay.classList.add('active');
 
   // community
@@ -401,12 +458,14 @@ function showShowdown(payload) {
     comm.parentNode.insertBefore(breakdown, comm.nextSibling);
   }
 
-  // results
+  // results with staggered animation
   const el = document.getElementById('showdownResults');
   el.innerHTML = '';
-  (payload.results || []).sort((a,b) => b.won - a.won).forEach(r => {
+  const sorted = (payload.results || []).sort((a,b) => b.won - a.won);
+  sorted.forEach((r, idx) => {
     const row = document.createElement('div');
     row.className = 'result-row' + (r.isWinner ? ' winner' : '');
+    row.style.animationDelay = `${idx * 0.1}s`;
 
     const cards = document.createElement('div');
     cards.style.cssText = 'display:flex;gap:3px;';
@@ -423,13 +482,19 @@ function showShowdown(payload) {
       <div class="rwon">${r.won > 0 ? '+' + r.won : ''}</div>`;
     el.appendChild(row);
   });
+
+  // Animate chips from pot to winner seats
+  const winnerIds = sorted.filter(r => r.isWinner).map(r => r.playerId || '');
+  if (winnerIds.length > 0 && gameState) {
+    setTimeout(() => animateChipsToWinners(winnerIds), 400);
+  }
 }
 
 function closeShowdown() {
   document.getElementById('showdownOverlay').classList.remove('active');
   myHand = [];
   renderMyHand();
-  // Don't auto-send ready here — let the user click the "准备" button explicitly
+  prevCommunityCount = 0;
 }
 
 // ===== Timer =====
@@ -509,5 +574,241 @@ function leaveGame() {
 
 function esc(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ===== Chip Animations =====
+let prevBets = {}; // track previous bets for animation
+
+function animateChipToPot(seatEl) {
+  const potEl = document.getElementById('potAmount');
+  if (!seatEl || !potEl) return;
+
+  const seatRect = seatEl.getBoundingClientRect();
+  const potRect  = potEl.getBoundingClientRect();
+  const dx = potRect.left - seatRect.left;
+  const dy = potRect.top - seatRect.top;
+
+  const chip = document.createElement('div');
+  chip.className = 'chip-token';
+  chip.textContent = '$';
+  chip.style.left = seatRect.left + seatRect.width/2 - 11 + 'px';
+  chip.style.top  = seatRect.top + seatRect.height/2 - 11 + 'px';
+  chip.style.position = 'fixed';
+  chip.style.setProperty('--dx', dx + 'px');
+  chip.style.setProperty('--dy', dy + 'px');
+
+  document.getElementById('emojiEffects').appendChild(chip);
+  chip.addEventListener('animationend', () => chip.remove());
+}
+
+function animateChipsToWinners(winnerIds) {
+  const potEl = document.getElementById('potAmount');
+  if (!potEl) return;
+  const potRect = potEl.getBoundingClientRect();
+  const seats = document.querySelectorAll('.seat');
+
+  seats.forEach(seat => {
+    const nameEl = seat.querySelector('.seat-name');
+    if (!nameEl) return;
+    // Check if this seat's player is a winner via the seat element
+    const seatRect = seat.getBoundingClientRect();
+
+    // Match winner by checking seat position
+    const players = gameState ? gameState.players || [] : [];
+    const myIdx = players.findIndex(p => p.id === myId);
+
+    players.forEach((p, i) => {
+      if (!winnerIds.includes(p.id)) return;
+      let posIdx = i;
+      if (myIdx >= 0) posIdx = (i - myIdx + players.length) % players.length;
+      const pos = SEAT_POSITIONS[posIdx];
+      if (!pos) return;
+
+      // Find the seat at this position
+      if (seat.style.top !== pos.top || seat.style.left !== pos.left) return;
+
+      const dx = potRect.left - seatRect.left;
+      const dy = potRect.top - seatRect.top;
+
+      for (let c = 0; c < 5; c++) {
+        const chip = document.createElement('div');
+        chip.className = 'chip-win';
+        chip.style.left = seatRect.left + seatRect.width/2 - 11 + 'px';
+        chip.style.top  = seatRect.top - 5 + 'px';
+        chip.style.position = 'fixed';
+        chip.style.setProperty('--dx', dx + 'px');
+        chip.style.setProperty('--dy', dy + 'px');
+        chip.style.animationDelay = `${c * 0.08}s`;
+
+        document.getElementById('emojiEffects').appendChild(chip);
+        chip.addEventListener('animationend', () => chip.remove());
+      }
+    });
+  });
+}
+
+// Check for new bets in renderSeats and animate
+function checkBetAnimations(state) {
+  const players = state.players || [];
+  players.forEach(p => {
+    const prevBet = prevBets[p.id] || 0;
+    if (p.bet > prevBet && p.bet > 0) {
+      // Find the seat element for this player
+      setTimeout(() => {
+        const seats = document.querySelectorAll('.seat');
+        const myIdx = players.findIndex(pp => pp.id === myId);
+        const pIdx = players.indexOf(p);
+        let posIdx = pIdx;
+        if (myIdx >= 0) posIdx = (pIdx - myIdx + players.length) % players.length;
+        const pos = SEAT_POSITIONS[posIdx];
+        if (!pos) return;
+
+        seats.forEach(seat => {
+          if (seat.style.top === pos.top && seat.style.left === pos.left) {
+            animateChipToPot(seat);
+          }
+        });
+      }, 50);
+    }
+    prevBets[p.id] = p.bet;
+  });
+  // Reset bets when phase is waiting (new hand)
+  if (state.phase === 'waiting') {
+    prevBets = {};
+  }
+}
+
+// ===== Emoji System =====
+const EMOJIS = [
+  { key: 'thumbsup', emoji: '👍', label: '点赞' },
+  { key: 'laugh',    emoji: '😂', label: '大笑' },
+  { key: 'fire',     emoji: '🔥', label: '火' },
+  { key: 'poop',     emoji: '💩', label: '臭' },
+  { key: 'tomato',   emoji: '🍅', label: '番茄' },
+  { key: 'coins',    emoji: '💰', label: '撒金币' },
+  { key: 'party',    emoji: '🎉', label: '庆祝' },
+  { key: 'angry',    emoji: '😡', label: '愤怒' },
+];
+
+// Build emoji panel on load
+(function initEmojiPanel() {
+  const panel = document.getElementById('emojiPanel');
+  if (!panel) return;
+  EMOJIS.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-item';
+    btn.innerHTML = `<span>${e.emoji}</span><span>${e.label}</span>`;
+    btn.onclick = () => {
+      sock.send('emoji', { emoji: e.key });
+      panel.classList.remove('show');
+    };
+    panel.appendChild(btn);
+  });
+})();
+
+function toggleEmojiPanel() {
+  document.getElementById('emojiPanel').classList.toggle('show');
+}
+
+// Close emoji panel when clicking outside
+document.addEventListener('click', (e) => {
+  const panel = document.getElementById('emojiPanel');
+  if (panel && !e.target.closest('.emoji-trigger') && !e.target.closest('.emoji-panel')) {
+    panel.classList.remove('show');
+  }
+});
+
+function onEmoji(payload) {
+  const emojiDef = EMOJIS.find(e => e.key === payload.emoji);
+  if (!emojiDef) return;
+
+  const layer = document.getElementById('emojiEffects');
+
+  switch (payload.emoji) {
+    case 'tomato':
+      playTomatoRain(layer);
+      break;
+    case 'coins':
+      playCoinFountain(layer);
+      break;
+    case 'party':
+      playConfetti(layer);
+      break;
+    default:
+      playEmojiFloat(layer, emojiDef.emoji);
+      break;
+  }
+}
+
+function playEmojiFloat(layer, emoji) {
+  const el = document.createElement('div');
+  el.className = 'emoji-floating';
+  el.textContent = emoji;
+  // Random horizontal position in middle third
+  el.style.left = (30 + Math.random() * 40) + '%';
+  el.style.top  = '60%';
+  layer.appendChild(el);
+  el.addEventListener('animationend', () => el.remove());
+}
+
+function playTomatoRain(layer) {
+  for (let i = 0; i < 15; i++) {
+    setTimeout(() => {
+      const t = document.createElement('div');
+      t.className = 'emoji-tomato';
+      t.textContent = '🍅';
+      t.style.left = (5 + Math.random() * 90) + '%';
+      t.style.top  = '-50px';
+      t.style.animationDuration = (0.8 + Math.random() * 0.6) + 's';
+      layer.appendChild(t);
+      t.addEventListener('animationend', () => t.remove());
+    }, i * 80);
+  }
+}
+
+function playCoinFountain(layer) {
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight * 0.5;
+  for (let i = 0; i < 25; i++) {
+    setTimeout(() => {
+      const c = document.createElement('div');
+      c.className = 'emoji-coin';
+      c.textContent = '🪙';
+      c.style.left = cx + 'px';
+      c.style.top  = cy + 'px';
+      const angle = (Math.random() * Math.PI * 2);
+      const dist  = 80 + Math.random() * 200;
+      c.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+      c.style.setProperty('--ty', Math.sin(angle) * dist - 100 + 'px');
+      c.style.animationDuration = (1 + Math.random() * 0.8) + 's';
+      layer.appendChild(c);
+      c.addEventListener('animationend', () => c.remove());
+    }, i * 40);
+  }
+}
+
+function playConfetti(layer) {
+  const colors = ['#f0c040','#ef4444','#22c55e','#3b82f6','#a855f7','#ec4899','#f97316'];
+  const cx = window.innerWidth / 2;
+  const cy = window.innerHeight * 0.35;
+  for (let i = 0; i < 60; i++) {
+    setTimeout(() => {
+      const p = document.createElement('div');
+      p.className = 'confetti-piece';
+      p.style.left = cx + 'px';
+      p.style.top  = cy + 'px';
+      p.style.background = colors[Math.floor(Math.random() * colors.length)];
+      p.style.width  = (5 + Math.random() * 6) + 'px';
+      p.style.height = (5 + Math.random() * 6) + 'px';
+      const angle = Math.random() * Math.PI * 2;
+      const dist  = 100 + Math.random() * 300;
+      p.style.setProperty('--tx', Math.cos(angle) * dist + 'px');
+      p.style.setProperty('--ty', Math.sin(angle) * dist + 'px');
+      p.style.setProperty('--rot', (360 + Math.random() * 720) + 'deg');
+      p.style.animationDuration = (1.2 + Math.random() * 1) + 's';
+      layer.appendChild(p);
+      p.addEventListener('animationend', () => p.remove());
+    }, i * 15);
+  }
 }
 

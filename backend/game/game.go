@@ -1033,6 +1033,13 @@ func (g *Game) SendChat(from, message string) {
 	}})
 }
 
+func (g *Game) SendEmoji(from, emoji string) {
+	g.Broadcast(Message{Type: "emoji", Payload: map[string]string{
+		"from":  from,
+		"emoji": emoji,
+	}})
+}
+
 func (g *Game) PlayerCount() int {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -40,10 +40,16 @@
     <div class="chat-input-row">
       <input type="text" id="chatInput" placeholder="发消息..." maxlength="100" onkeydown="if(event.key==='Enter')sendChat()">
       <button class="chat-send-btn" onclick="sendChat()">发送</button>
+      <div style="position:relative">
+        <button class="emoji-trigger" onclick="toggleEmojiPanel()" title="发送表情">😊</button>
+        <div class="emoji-panel" id="emojiPanel"></div>
+      </div>
     </div>
   </div>
 
 </div>
+
+<div class="emoji-effects-layer" id="emojiEffects"></div>
 
 <div class="showdown-overlay" id="showdownOverlay">
   <div class="showdown-box">

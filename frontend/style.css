@@ -407,16 +407,23 @@ input[type=text].room-input:focus { border-color:var(--gold); }
 
 /* Showdown */
 .showdown-overlay {
-  display:none; position:fixed; inset:0;
+  position:fixed; inset:0;
   background:rgba(0,0,0,.8); z-index:100;
-  align-items:center; justify-content:center; backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px);
+  opacity:0; pointer-events:none; visibility:hidden;
+  transition:opacity .35s ease, visibility 0s .35s;
 }
-.showdown-overlay.active { display:flex; }
+.showdown-overlay.active {
+  opacity:1; pointer-events:auto; visibility:visible;
+  transition:opacity .35s ease, visibility 0s 0s;
+}
 .showdown-box {
   background:var(--surface2); border:1px solid var(--border);
   border-radius:16px; padding:28px 32px; min-width:340px; max-width:520px;
   text-align:center; box-shadow:0 24px 48px rgba(0,0,0,.6);
+  transform:scale(.85) translateY(20px); transition:transform .35s ease;
 }
+.showdown-overlay.active .showdown-box { transform:scale(1) translateY(0); }
 .showdown-box h2 { color:var(--gold); margin-bottom:14px; font-size:1rem; }
 
 .result-row {
@@ -460,6 +467,178 @@ input[type=text].room-input:focus { border-color:var(--gold); }
 .stat-box { background:var(--surface); border:1px solid var(--border); border-radius:var(--r); padding:16px; text-align:center; }
 .stat-box .stat-val { font-size:1.4rem; font-weight:800; color:var(--gold); }
 .stat-box .stat-lbl { font-size:.73rem; color:var(--muted); margin-top:3px; }
+
+/* ─── ANIMATIONS ─── */
+
+/* Card dealing */
+@keyframes dealCard {
+  0%   { opacity:0; transform:scale(.3) translateY(-60px) rotate(-15deg); }
+  60%  { opacity:1; transform:scale(1.08) translateY(2px) rotate(2deg); }
+  100% { opacity:1; transform:scale(1) translateY(0) rotate(0); }
+}
+.card.deal-anim {
+  animation: dealCard .4s cubic-bezier(.17,.67,.35,1.2) both;
+}
+
+/* Card flip (community cards) */
+.card-flip-container {
+  perspective: 600px;
+  display:inline-block;
+}
+.card-flip-inner {
+  position:relative;
+  transform-style:preserve-3d;
+  transition: transform .5s ease;
+}
+.card-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
+.card-flip-front, .card-flip-back {
+  backface-visibility: hidden;
+}
+.card-flip-back {
+  position:absolute; inset:0;
+  transform: rotateY(0deg);
+}
+.card-flip-front {
+  transform: rotateY(180deg);
+}
+
+/* Chip flying to pot */
+@keyframes chipToPot {
+  0%   { opacity:1; transform:translate(0,0) scale(1); }
+  70%  { opacity:1; }
+  100% { opacity:0; transform:translate(var(--dx), var(--dy)) scale(.5); }
+}
+.chip-token {
+  position:absolute; z-index:50; pointer-events:none;
+  width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(135deg,#f0c040,#d4a020);
+  border:2px solid #b8860b;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+  display:flex; align-items:center; justify-content:center;
+  font-size:.5rem; font-weight:900; color:#5a3d00;
+  animation: chipToPot .6s ease-in both;
+}
+
+/* Pot to winner */
+@keyframes chipToWinner {
+  0%   { opacity:0; transform:translate(var(--dx), var(--dy)) scale(.5); }
+  30%  { opacity:1; }
+  100% { opacity:1; transform:translate(0,0) scale(1); }
+}
+.chip-win {
+  position:absolute; z-index:50; pointer-events:none;
+  width:22px; height:22px; border-radius:50%;
+  background:linear-gradient(135deg,#f0c040,#d4a020);
+  border:2px solid #b8860b;
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+  animation: chipToWinner .6s ease-out both;
+}
+
+/* Winner seat glow pulse */
+@keyframes winnerGlow {
+  0%,100% { box-shadow:0 0 14px rgba(240,192,64,.35); }
+  50%     { box-shadow:0 0 30px rgba(240,192,64,.7), 0 0 60px rgba(240,192,64,.3); }
+}
+.seat.winner .seat-info {
+  border-color:var(--gold);
+  animation: winnerGlow 1s ease-in-out 3;
+}
+
+/* Showdown result rows stagger */
+@keyframes resultSlideIn {
+  from { opacity:0; transform:translateX(-20px); }
+  to   { opacity:1; transform:translateX(0); }
+}
+.result-row {
+  display:flex; align-items:center; gap:10px;
+  padding:9px 11px; border-radius:9px; margin-bottom:7px;
+  background:rgba(255,255,255,.04);
+  animation: resultSlideIn .3s ease both;
+}
+
+/* ─── EMOJI INTERACTIONS ─── */
+
+.emoji-trigger {
+  background:none; border:1px solid var(--border); border-radius:6px;
+  color:var(--muted); cursor:pointer; padding:6px 10px; font-size:1rem;
+  transition:background .2s, border-color .2s;
+  position:relative;
+}
+.emoji-trigger:hover { background:rgba(255,255,255,.08); border-color:var(--gold); }
+
+.emoji-panel {
+  display:none; position:absolute; bottom:100%; left:50%; transform:translateX(-50%);
+  background:var(--surface2); border:1px solid var(--border); border-radius:12px;
+  padding:10px; margin-bottom:8px;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  z-index:60;
+}
+.emoji-panel.show { display:flex; flex-wrap:wrap; gap:6px; }
+.emoji-panel .emoji-item {
+  width:48px; height:48px; border-radius:10px; border:none;
+  background:rgba(255,255,255,.06); cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; transition:transform .15s, background .15s;
+}
+.emoji-panel .emoji-item:hover { transform:scale(1.15); background:rgba(255,255,255,.12); }
+.emoji-panel .emoji-item span:first-child { font-size:1.4rem; }
+.emoji-panel .emoji-item span:last-child { font-size:.5rem; color:var(--muted); }
+
+/* Emoji floating animation */
+@keyframes emojiFloat {
+  0%   { opacity:0; transform:translate(-50%,-50%) scale(0); }
+  15%  { opacity:1; transform:translate(-50%,-50%) scale(1.5); }
+  30%  { transform:translate(-50%,-50%) scale(1.2); }
+  80%  { opacity:1; transform:translate(-50%,-80%) scale(1.2); }
+  100% { opacity:0; transform:translate(-50%,-120%) scale(.8); }
+}
+.emoji-floating {
+  position:fixed; z-index:200; pointer-events:none;
+  font-size:3.5rem; filter:drop-shadow(0 4px 8px rgba(0,0,0,.5));
+  animation: emojiFloat 2s ease-out forwards;
+}
+
+/* Tomato rain */
+@keyframes tomatoFall {
+  0%   { transform:translateY(-100px) rotate(0deg); opacity:1; }
+  80%  { opacity:1; }
+  100% { transform:translateY(calc(100vh + 50px)) rotate(720deg); opacity:0; }
+}
+.emoji-tomato {
+  position:fixed; z-index:200; pointer-events:none;
+  font-size:2rem;
+  animation: tomatoFall 1.2s ease-in forwards;
+}
+
+/* Coin fountain */
+@keyframes coinFountain {
+  0%   { transform:translate(0,0) scale(1); opacity:1; }
+  50%  { opacity:1; }
+  100% { transform:translate(var(--tx), var(--ty)) scale(.4); opacity:0; }
+}
+.emoji-coin {
+  position:fixed; z-index:200; pointer-events:none;
+  font-size:1.5rem;
+  animation: coinFountain 1.5s ease-out forwards;
+}
+
+/* Confetti */
+@keyframes confettiFall {
+  0%   { transform:translate(0,0) rotate(0deg); opacity:1; }
+  100% { transform:translate(var(--tx), var(--ty)) rotate(var(--rot)); opacity:0; }
+}
+.confetti-piece {
+  position:fixed; z-index:200; pointer-events:none;
+  width:8px; height:8px; border-radius:2px;
+  animation: confettiFall 1.8s ease-out forwards;
+}
+
+/* Emoji effects overlay */
+.emoji-effects-layer {
+  position:fixed; inset:0; z-index:200; pointer-events:none; overflow:hidden;
+}
 
 @media (max-width:600px) {
   .cards-row { grid-template-columns:1fr; }

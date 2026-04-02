@@ -242,8 +242,8 @@ func (c *client) readPump(h *Hub, room *game.Room) {
 		if err := json.Unmarshal(raw, &msg); err != nil {
 			continue
 		}
-		// spectators can only chat or join
-		if c.isSpectator && msg.Type != "chat" && msg.Type != "join" {
+		// spectators can only chat, send emojis, or join
+		if c.isSpectator && msg.Type != "chat" && msg.Type != "join" && msg.Type != "emoji" {
 			continue
 		}
 		switch msg.Type {
@@ -265,6 +265,12 @@ func (c *client) readPump(h *Hub, room *game.Room) {
 			}
 			json.Unmarshal(msg.Payload, &payload)
 			room.Game.SendChat(c.playerName, payload.Message)
+		case "emoji":
+			var payload struct {
+				Emoji string `json:"emoji"`
+			}
+			json.Unmarshal(msg.Payload, &payload)
+			room.Game.SendEmoji(c.playerName, payload.Emoji)
 		case "rebuy":
 			if err := room.Game.Rebuy(c.playerID, room.StartingChips); err != nil {
 				data, _ := json.Marshal(game.Message{Type: "error", Payload: map[string]string{"message": err.Error()}})
